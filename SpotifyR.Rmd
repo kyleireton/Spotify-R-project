@@ -1,0 +1,788 @@
+---
+title: "Spotify R"
+output: html_notebook
+---
+
+```{r}
+
+library(tidyverse)
+library(lubridate)
+library(janitor)
+library(jsonlite)
+library(skimr)
+library(showtext)
+library(ggridges)
+library(scales)
+
+```
+
+```{r, fig.width=12}
+font_add_google(name = "Oswald",
+                family = "oswald")
+
+showtext::showtext_auto()
+```
+
+```{r}
+
+setwd("C:/Users/kylei/OneDrive/Zephyrus/Advance/Spotify/MyData")
+
+listen_data <- fromJSON("StreamingHistory0.json") %>% 
+  clean_names() %>% 
+  mutate(end_time = with_tz(end_time, tzone = "America/Los_Angeles"),
+         date = date(end_time),
+         day_week_temp = wday(end_time),
+         weekend = factor(case_when(
+           day_week_temp == 6 | day_week_temp == 7 ~ "Weekend",
+           day_week_temp == 1 | day_week_temp == 2 | day_week_temp == 3 | day_week_temp == 4 | day_week_temp == 5 ~ "Weekday",
+           TRUE ~ NA_character_
+         ))) %>% 
+  filter(date >= "2021-01-01" & date <= "2021-12-31") %>% 
+  arrange(desc(date)) %>% 
+  select(-day_week_temp)
+
+skim(listen_data)
+
+```
+
+```{r, fig.width=12}
+minsperday = listen_data %>%
+  group_by(date) %>% 
+  mutate(sum_ms_listen = sum(ms_played),
+    mins_listen = ((sum_ms_listen / 1000)/60))
+
+minsperday
+```
+```{r}
+
+top_artists = listen_data %>% 
+  group_by(artist_name) %>% 
+  summarise(hrs_listened = sum(ms_played)/1000/360) %>% 
+  ungroup() %>% 
+  arrange(desc(hrs_listened))
+
+head(top_artists)
+
+```
+```{r}
+
+top_Freddie = listen_data %>% 
+  filter(artist_name == "Freddie Gibbs") %>% 
+  group_by(track_name) %>% 
+  summarise(mins_listened = sum(ms_played)/1000/60) %>% 
+  ungroup() %>% 
+  arrange(desc(mins_listened))
+
+head(top_Freddie)
+
+top_deadmau5 = listen_data %>% 
+  filter(artist_name == "deadmau5") %>% 
+  group_by(track_name) %>% 
+  summarise(mins_listened = sum(ms_played)/1000/60) %>% 
+  ungroup() %>% 
+  arrange(desc(mins_listened))
+
+head(top_deadmau5)
+
+```
+
+top 40 tracks
+
+```{r, fig.width= 12}
+
+listen_data %>% 
+  group_by(artist_name, track_name) %>% 
+  summarise(mins = round(sum(ms_played)/1000/60)) %>%
+  ungroup() %>% 
+  arrange(desc(mins)) %>% 
+  slice_head(n = 40) %>% 
+  
+  ggplot(
+       
+       aes(fct_reorder(track_name,
+                         mins),
+             fill = track_name)) +
+  
+  geom_col(aes(y = mins),
+           alpha = 0.8) +
+  
+  geom_text(aes(y = mins,
+                label = mins),
+            hjust = -0.2,
+            family = "oswald",
+            color = "white",
+            size = 5) +
+
+  scale_fill_viridis_d(option = "plasma") +
+  
+  theme_dark() +
+  
+  coord_flip(#xlim = c(81, 101),
+             ylim = c(0, 250),
+             clip = "off") +
+  
+  theme(axis.text.x = element_blank(),
+        plot.background = element_rect(fill = "black"),
+        legend.position = "none",
+        text = element_text(family = "oswald", color = "white", size = 15),
+        panel.background = element_rect(fill = "black"),
+        axis.text = element_text(color = "white"),
+        plot.title = element_text(hjust = 0.5),
+        plot.title.position = "plot") +
+  
+  labs(x = "Top tracks", y = "Minutes Listened",
+       title = "My top 40 tracks in 2021")
+
+```
+
+top 40 tracks, w/o DnD podcasts
+
+```{r, fig.width= 12}
+
+listen_data %>% 
+  filter(artist_name != "Critical Role",
+         artist_name != "The Adventure Zone") %>% 
+  group_by(artist_name, track_name) %>% 
+  summarise(mins = round(sum(ms_played)/1000/60)) %>%
+  ungroup() %>% 
+  arrange(desc(mins)) %>% 
+  slice_head(n = 40) %>% 
+  
+  ggplot(
+       
+       aes(fct_reorder(track_name,
+                         mins),
+             fill = track_name)) +
+  
+  geom_col(aes(y = mins),
+           alpha = 0.8) +
+  
+  geom_text(aes(y = mins,
+                label = mins),
+            hjust = -0.2,
+            family = "oswald",
+            color = "white",
+            size = 5) +
+
+  scale_fill_viridis_d(option = "plasma") +
+  
+  theme_dark() +
+  
+  coord_flip(#xlim = c(81, 101),
+             ylim = c(0, 150),
+             clip = "off") +
+  
+  theme(axis.text.x = element_blank(),
+        plot.background = element_rect(fill = "black"),
+        legend.position = "none",
+        text = element_text(family = "oswald", color = "white", size = 15),
+        panel.background = element_rect(fill = "black"),
+        axis.text = element_text(color = "white"),
+        plot.title = element_text(hjust = 0.5),
+        plot.title.position = "plot") +
+  
+  labs(x = "Top tracks", y = "Minutes Listened",
+       title = "My top 40 tracks in 2021, minus DnD podcasts :)")
+
+```
+top artists... 
+
+```{r, fig.width= 12}
+
+listen_data %>% 
+  # filter(artist_name != "Critical Role",
+  #        artist_name != "The Adventure Zone") %>% 
+  group_by(artist_name) %>% 
+  summarise(hrs = round(sum(ms_played)/1000/360)) %>%
+  ungroup() %>% 
+  arrange(desc(hrs)) %>% 
+  slice_head(n = 40) %>% 
+  
+  ggplot(
+       
+       aes(fct_reorder(artist_name,
+                        hrs),
+             fill = artist_name)) +
+  
+  geom_col(aes(y = hrs),
+           alpha = 0.8) +
+  
+  geom_text(aes(y = hrs,
+                label = hrs),
+            hjust = -0.2,
+            family = "oswald",
+            color = "white",
+            size = 5) +
+
+  scale_fill_viridis_d(option = "plasma") +
+  
+  theme_dark() +
+  
+  coord_flip(#xlim = c(81, 101),
+             ylim = c(0, 400),
+             clip = "off") +
+  
+  theme(axis.text.x = element_blank(),
+        plot.background = element_rect(fill = "black"),
+        legend.position = "none",
+        text = element_text(family = "oswald", color = "white", size = 15),
+        panel.background = element_rect(fill = "black"),
+        axis.text = element_text(color = "white"),
+        plot.title = element_text(hjust = 0.5),
+        plot.title.position = "plot") +
+  
+  labs(x = "Top tracks", y = "Hours Listened",
+       title = "My top 40 artists in 2021")
+
+```
+
+
+top artists, minus DnD podcasts
+
+```{r, fig.width= 12}
+
+listen_data %>% 
+  filter(artist_name != "Critical Role",
+         artist_name != "The Adventure Zone") %>%
+  group_by(artist_name) %>% 
+  summarise(hrs = round(sum(ms_played)/1000/360)) %>%
+  ungroup() %>% 
+  arrange(desc(hrs)) %>% 
+  slice_head(n = 40) %>% 
+  
+  ggplot(
+       
+       aes(fct_reorder(artist_name,
+                        hrs),
+             fill = artist_name)) +
+  
+  geom_col(aes(y = hrs),
+           alpha = 0.8) +
+  
+  geom_text(aes(y = hrs,
+                label = hrs),
+            hjust = -0.2,
+            family = "oswald",
+            color = "white",
+            size = 5) +
+
+  scale_fill_viridis_d(option = "plasma") +
+  
+  theme_dark() +
+  
+  coord_flip(#xlim = c(81, 101),
+             ylim = c(0, 120),
+             clip = "off") +
+  
+  theme(axis.text.x = element_blank(),
+        plot.background = element_rect(fill = "black"),
+        legend.position = "none",
+        text = element_text(family = "oswald", color = "white", size = 15),
+        panel.background = element_rect(fill = "black"),
+        axis.text = element_text(color = "white"),
+        plot.title = element_text(hjust = 0.5),
+        plot.title.position = "plot") +
+  
+  labs(x = "Top tracks", y = "Hours Listened",
+       title = "My top 40 artists in 2021, minus DnD Podcasts :)")
+
+```
+
+top 5 tracks by each artist, ranked by top artists
+
+```{r}
+top_art_tracks = listen_data %>% 
+  # filter(artist_name != "Critical Role",
+  #        artist_name != "The Adventure Zone") %>% 
+  group_by(artist_name, track_name) %>% 
+  summarise(track_mins = round(sum(ms_played)/1000/60)) %>%
+  ungroup() 
+
+top_5s = top_art_tracks %>% 
+  group_by(artist_name) %>% 
+  mutate(artist_sum = sum(track_mins)) %>% 
+  arrange(desc(track_mins)) %>% 
+  slice_head(n = 5) %>% 
+  ungroup() %>% 
+  arrange(desc(artist_sum))
+```
+
+```{r, fig.width= 12}
+top_5s %>% 
+  slice_head(n = 50) %>% 
+  count(artist_name)
+```
+
+
+```{r, fig.width= 12, fig.height= 10}
+top_5s %>% 
+  
+  slice_head(n = 50) %>% 
+  
+  mutate(track_trim = substr(track_name, 1, 50)) %>% 
+  
+  ggplot() +
+    
+  facet_wrap(~ artist_name,
+             nrow = 6,
+             ncol = 2,
+             scales = "free") +
+  
+  geom_col(aes(x = reorder(track_trim, (track_mins)),
+                y = track_mins,
+               fill = track_trim),
+           alpha = 0.8) +
+  
+  geom_text(aes(x = reorder(track_trim, (track_mins)),
+                y = track_mins,
+                label = track_mins),
+            hjust = -0.2,
+            family = "oswald",
+            color = "white",
+            size = 5) +
+  
+  coord_flip(#xlim = c(81, 101),
+             ylim = c(0, 250),
+             clip = "off") +
+  
+  scale_fill_viridis_d(#option = "magma"
+                       ) +
+  
+  labs(x = "Top tracks", y = "Minutes Listened",
+       title = "My top 5 tracks, by my top 10 artists!") +
+  
+  theme_classic() +
+  
+  theme(axis.text.x = element_blank(),
+        plot.background = element_rect(fill = "black"),
+        legend.position = "none",
+        text = element_text(family = "oswald", color = "white", size = 15),
+        panel.background = element_rect(fill = "black"),
+        axis.text = element_text(color = "white"),
+        plot.title = element_text(hjust = 0.5),
+        plot.title.position = "plot") 
+
+```
+
+
+
+```{r, fig.width= 12, fig.height= 10}
+top_5s %>% 
+  
+  filter(artist_name != "Critical Role",
+         artist_name != "The Adventure Zone") %>% 
+  
+  slice_head(n = 50) %>% 
+  
+  mutate(track_trim = substr(track_name, 1, 50)) %>% 
+  
+  ggplot() +
+    
+  facet_wrap(~ artist_name,
+             nrow = 6,
+             ncol = 2,
+             scales = "free") +
+  
+  geom_col(aes(x = reorder(track_trim, (track_mins)),
+                y = track_mins,
+               fill = track_trim),
+           alpha = 0.8) +
+  
+  geom_text(aes(x = reorder(track_trim, (track_mins)),
+                y = track_mins,
+                label = track_mins),
+            hjust = -0.2,
+            family = "oswald",
+            color = "white",
+            size = 5) +
+  
+  coord_flip(#xlim = c(81, 101),
+             ylim = c(0, 150),
+             clip = "off") +
+  
+  scale_fill_viridis_d(#option = "magma"
+                       ) +
+  
+  labs(x = "Top tracks", y = "Minutes Listened",
+       title = "My top 5 tracks, by my top 10 artists (minus DnD podcasts)!") +
+  
+  theme_classic() +
+  
+  theme(axis.text.x = element_blank(),
+        plot.background = element_rect(fill = "black"),
+        legend.position = "none",
+        text = element_text(family = "oswald", color = "white", size = 15),
+        panel.background = element_rect(fill = "black"),
+        axis.text = element_text(color = "white"),
+        plot.title = element_text(hjust = 0.5),
+        plot.title.position = "plot") 
+
+```
+
+
+
+
+```{r, fig.width= 12, fig.height= 10}
+listen_data %>% 
+  group_by(artist_name, track_name) %>% 
+  summarise(track_mins = round(sum(ms_played)/1000/60)) %>%
+  ungroup() %>% 
+  
+  group_by(artist_name) %>% 
+  mutate(artist_sum = sum(track_mins)) %>% 
+  arrange(desc(track_mins)) %>% 
+  slice_head(n = 5) %>% 
+  ungroup() %>% 
+  
+  arrange(desc(artist_sum)) %>% 
+  slice_head(n = 50) %>% 
+  mutate(track_trim = substr(track_name, 1, 39)) %>% 
+  
+  ggplot() +
+  
+  facet_wrap(~ artist_name, nrow = 6, ncol = 2, scales = "free") +
+  
+  geom_col(aes(x = reorder(track_trim, (track_mins)), y = track_mins,
+               fill = track_trim),
+           alpha = 0.8) +
+  
+  geom_text(aes(x = reorder(track_trim, (track_mins)),
+                y = track_mins,
+                label = track_mins),
+            hjust = -0.2,
+            family = "oswald",
+            color = "white",
+            size = 5) +
+  
+  coord_flip(#xlim = c(81, 101),
+             ylim = c(0, 150),
+             clip = "off") +
+  
+  scale_fill_viridis_d() +
+  
+  labs(x = "Top tracks", y = "Minutes Listened",
+       title = "My Top 5 Tracks, by My Top 10 Artists!") +
+  
+  theme_classic() +
+  
+  theme(axis.text.x = element_blank(),
+        plot.background = element_rect(fill = "black"),
+        legend.position = "none",
+        text = element_text(family = "oswald", color = "white", size = 15),
+        panel.background = element_rect(fill = "black"),
+        axis.text = element_text(color = "white"),
+        plot.title = element_text(hjust = 0.5),
+        plot.title.position = "plot") 
+```
+
+
+```{r}
+top_artist_tracks %>% 
+  
+  ggplot(
+       
+       aes(fct_reorder(artist_name,
+                        hrs),
+             fill = artist_name)) +
+  
+  geom_col(aes(y = hrs),
+           alpha = 0.8) +
+  
+  geom_text(aes(y = hrs,
+                label = hrs),
+            hjust = -0.2,
+            family = "oswald",
+            color = "white",
+            size = 5) +
+
+  scale_fill_viridis_d(option = "plasma") +
+  
+  theme_dark() +
+  
+  coord_flip(#xlim = c(81, 101),
+             ylim = c(0, 400),
+             clip = "off") +
+  
+  theme(axis.text.x = element_blank(),
+        plot.background = element_rect(fill = "black"),
+        legend.position = "none",
+        text = element_text(family = "oswald", color = "white", size = 15),
+        panel.background = element_rect(fill = "black"),
+        axis.text = element_text(color = "white"),
+        plot.title = element_text(hjust = 0.5),
+        plot.title.position = "plot") +
+  
+  labs(x = "Top tracks", y = "Hours Listened",
+       title = "My top 40 artists in 2021")
+
+
+```
+
+
+```{r, fig.width=12}
+ggplot(minsperday,
+       aes(x = date,
+           y = mins_listen,
+           color = mins_listen)) +
+  
+  geom_line() +
+  
+  scale_x_date(limits = as.Date(c("2021-01-01","2021-12-31")),
+               expand = c(0,0),
+               date_breaks = "1 month",
+               date_labels = "%B") +
+  
+  scale_color_viridis_c(option = "plasma") +
+  
+  labs(x = "", y = "Minutes Listened") +
+  
+  theme_dark() +
+  
+  theme(plot.background = element_rect(fill = "black"),
+        legend.position = "none",
+        text = element_text(family = "oswald", color = "white", size = 15),
+        panel.background = element_rect(fill = "black"),
+        axis.text = element_text(color = "white"),
+        axis.text.x = element_text(angle = 25),
+        axis.text.y = element_text(size = 15, hjust = 1.2),
+        plot.title.position = "plot")
+
+```
+
+```{r}
+maxdates = minsperday %>% 
+  group_by(date) %>% 
+  slice(n()) %>%
+  ungroup() %>% 
+  arrange(desc(mins_listen)) %>%
+  select(date, mins_listen) %>% 
+  mutate(hrs_listen = mins_listen/60)
+
+head(maxdates)
+```
+
+
+```{r, fig.width=12}
+
+top5days1 = listen_data %>%
+  group_by(date) %>% 
+  mutate(sum_ms_listen = sum(ms_played),
+    mins_listen = ((sum_ms_listen / 1000)/60)) %>% 
+  arrange(desc(mins_listen)) %>% 
+  
+  filter(date == "2021-07-25") %>% 
+  group_by(track_name) %>% 
+  tally(ms_played) %>% 
+  mutate(mins_listen = as.integer(((n / 1000)/60)),
+         track_name = as.factor(track_name)) %>% 
+  select(-n)
+
+
+ggplot(top5days1,
+       aes(fct_reorder(track_name,
+                         mins_listen),
+             fill = track_name)) +
+  
+  geom_col(aes(y = mins_listen),
+           alpha = 0.8) +
+  
+  geom_text(aes(y = mins_listen,
+                label = mins_listen),
+            hjust = -0.2,
+            family = "oswald",
+            color = "white",
+            size = 5) +
+  
+  # scale_y_continuous(labels = comma,
+  #                    limits = c(0, 10)) +
+  
+  scale_fill_viridis_d(option = "plasma") +
+  
+  theme_dark() +
+  
+  coord_flip(xlim = c(81, 101),
+             ylim = c(0, 20),
+             clip = "off") +
+  
+  theme(axis.text.x = element_blank(),
+        plot.background = element_rect(fill = "black"),
+        legend.position = "none",
+        text = element_text(family = "oswald", color = "white", size = 15),
+        panel.background = element_rect(fill = "black"),
+        axis.text = element_text(color = "white"),
+        plot.title = element_text(hjust = 0.5),
+        plot.title.position = "plot") +
+  
+  labs(x = "Top tracks", y = "Minutes Listened",
+       title = "I was a DM for DnD 7-25-21 (6.5 hrs)")
+
+```
+
+
+```{r, fig.width=12}
+
+top5days2 = listen_data %>%
+  group_by(date) %>% 
+  mutate(sum_ms_listen = sum(ms_played),
+    mins_listen = ((sum_ms_listen / 1000)/60)) %>% 
+  arrange(desc(mins_listen)) %>% 
+  
+  filter(date == "2021-10-06") %>% 
+  group_by(track_name) %>% 
+  tally(ms_played) %>% 
+  mutate(mins_listen = as.integer(((n / 1000)/60)),
+         track_name = as.factor(track_name)) %>% 
+  select(-n)
+
+
+ggplot(top5days2,
+       aes(fct_reorder(track_name,
+                         mins_listen),
+             fill = track_name)) +
+  
+  geom_col(aes(y = mins_listen),
+           alpha = 0.8) +
+  
+  geom_text(aes(y = mins_listen,
+                label = mins_listen),
+            hjust = -0.2,
+            family = "oswald",
+            color = "white",
+            size = 5) +
+  
+  # scale_y_continuous(labels = comma,
+  #                    limits = c(0, 10)) +
+  
+  scale_fill_viridis_d(option = "plasma") +
+  
+  theme_dark() +
+  
+  coord_flip(xlim = c(2, 4),
+             # ylim = c(0, 120),
+             clip = "off") +
+  
+  theme(axis.text.x = element_blank(),
+        plot.background = element_rect(fill = "black"),
+        legend.position = "none",
+        text = element_text(family = "oswald", color = "white", size = 15),
+        panel.background = element_rect(fill = "black"),
+        axis.text = element_text(color = "white"),
+        plot.title = element_text(hjust = 0.5),
+        plot.title.position = "plot") +
+  
+  labs(x = "Top Tracks", y = "Minutes Listened",
+       title = "I discovered DnD podcasts 10-06-21 (6.4 hrs)")
+
+```
+
+```{r, fig.width=12}
+
+top5days3 = listen_data %>%
+  group_by(date) %>% 
+  mutate(sum_ms_listen = sum(ms_played),
+    mins_listen = ((sum_ms_listen / 1000)/60)) %>% 
+  arrange(desc(mins_listen)) %>% 
+  
+  filter(date == "2021-11-03") %>% 
+  group_by(track_name) %>% 
+  tally(ms_played) %>% 
+  mutate(mins_listen = as.integer(((n / 1000)/60)),
+         track_name = as.factor(track_name)) %>% 
+  select(-n)
+
+
+ggplot(top5days3,
+       aes(fct_reorder(track_name,
+                         mins_listen),
+             fill = track_name)) +
+  
+  geom_col(aes(y = mins_listen),
+           alpha = 0.8) +
+  
+  geom_text(aes(y = mins_listen,
+                label = mins_listen),
+            hjust = -0.2,
+            family = "oswald",
+            color = "white",
+            size = 5) +
+  
+  # scale_y_continuous(labels = comma,
+  #                    limits = c(0, 10)) +
+  
+  scale_fill_viridis_d(option = "plasma") +
+  
+  theme_dark() +
+  
+  coord_flip(xlim = c(89, 109),
+             # ylim = c(0, 120),
+             clip = "off") +
+  
+  theme(axis.text.x = element_blank(),
+        plot.background = element_rect(fill = "black"),
+        legend.position = "none",
+        text = element_text(family = "oswald", color = "white", size = 15),
+        panel.background = element_rect(fill = "black"),
+        axis.text = element_text(color = "white"),
+        plot.title = element_text(hjust = 0.5),
+        plot.title.position = "plot") +
+  
+  labs(x = "Top tracks", y = "Minutes Listened",
+       title = "Blues Rock & Hip Hop 11-03-21 (6.2 hrs)")
+
+```
+
+```{r, fig.width=12}
+
+top5days4 = listen_data %>%
+  group_by(date) %>% 
+  mutate(sum_ms_listen = sum(ms_played),
+    mins_listen = ((sum_ms_listen / 1000)/60)) %>% 
+  arrange(desc(mins_listen)) %>% 
+  
+  filter(date == "2021-03-13") %>% 
+  group_by(track_name) %>% 
+  tally(ms_played) %>% 
+  mutate(mins_listen = as.integer(((n / 1000)/60)),
+         track_name = as.factor(track_name)) %>% 
+  select(-n)
+
+
+ggplot(top5days4,
+       aes(fct_reorder(track_name,
+                         mins_listen),
+             fill = track_name)) +
+  
+  geom_col(aes(y = mins_listen),
+           alpha = 0.8) +
+  
+  geom_text(aes(y = mins_listen,
+                label = mins_listen),
+            hjust = -0.2,
+            family = "oswald",
+            color = "white",
+            size = 5) +
+  
+  # scale_y_continuous(labels = comma,
+  #                    limits = c(0, 10)) +
+  
+  scale_fill_viridis_d(option = "plasma") +
+  
+  theme_dark() +
+  
+  coord_flip(xlim = c(62, 82),
+             # ylim = c(0, 120),
+             clip = "off") +
+  
+  theme(axis.text.x = element_blank(),
+        plot.background = element_rect(fill = "black"),
+        legend.position = "none",
+        text = element_text(family = "oswald", color = "white", size = 15),
+        panel.background = element_rect(fill = "black"),
+        axis.text = element_text(color = "white"),
+        plot.title = element_text(hjust = 0.5),
+        plot.title.position = "plot") +
+  
+  labs(x = "Top tracks", y = "Minutes Listened",
+       title = "Classic Rock 3-13-21 (6.1 hrs)")
+
+```
